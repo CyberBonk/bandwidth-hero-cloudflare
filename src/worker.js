@@ -108,35 +108,6 @@ export default {
     const imageUrl = sourceUrl(imageUrlParameter(requestUrl, params), requestUrl.hostname.toLowerCase());
     if (!imageUrl) return reply("Invalid image URL", 400);
 
-    // Some Comix image hosts reject Cloudflare's outbound IPs. Keep the
-    // Egypt-reachable Worker as Komikku's entry point and use the existing
-    // Netlify function only for fetching those images server to server.
-    if (/\.cipher-vault-alpha\.site$/i.test(imageUrl.hostname)) {
-      try {
-        const backend = new URL("https://mellifluous-baklava-3f154e.netlify.app/api/index");
-        backend.searchParams.set("url", imageUrl.toString());
-        backend.searchParams.set("jpeg", params.get("jpg") === "1" ? "1" : "0");
-        backend.searchParams.set("l", params.get("l") ?? "40");
-        backend.searchParams.set("bw", params.get("bw") ?? "0");
-        const backendHeaders = new Headers();
-        const origin = request.headers.get("Origin");
-        if (isComixOrigin(origin)) backendHeaders.set("Origin", origin);
-        const backendResponse = await fetch(backend, { headers: backendHeaders, redirect: "manual" });
-        if (backendResponse.ok && backendResponse.headers.get("Content-Type")?.startsWith("image/")) {
-          const resultHeaders = new Headers(cors);
-          for (const name of ["Content-Type", "Content-Length", "X-Enc-Seed", "X-Enc-Len", "X-Enc-Algo", "X-Scramble-Seed", "X-Scramble-Grid", "X-Scramble-Algo", "X-Scramble-Hash"]) {
-            const value = backendResponse.headers.get(name);
-            if (value) resultHeaders.set(name, value);
-          }
-          resultHeaders.set("Access-Control-Expose-Headers", "X-Enc-Seed, X-Enc-Len, X-Enc-Algo, X-Scramble-Seed, X-Scramble-Grid, X-Scramble-Algo, X-Scramble-Hash");
-          return new Response(backendResponse.body, { status: 200, headers: resultHeaders });
-        }
-      } catch (error) {
-        console.error("Comix backend fetch failed", error);
-      }
-      return redirectToSource(imageUrl, "comix-backend-error");
-    }
-
     const quality = integer(params.get("quality") ?? params.get("l"), 5, 1, 100);
     const requestedWidth = integer(params.get("max_width"), 1080, 0, 4096);
     const image = {

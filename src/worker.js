@@ -62,7 +62,9 @@ export default {
     const imageUrl = sourceUrl(params.get("url"), requestUrl.hostname.toLowerCase());
     if (!imageUrl) return reply("Invalid image URL", 400);
 
-    const quality = integer(params.get("quality") ?? params.get("l"), 5, 1, 100);
+    const requestedQuality = integer(params.get("quality") ?? params.get("l"), 5, 1, 100);
+    // Komikku's lowest UI setting is 10%; keep its reader images at 5%.
+    const quality = params.has("jpg") ? Math.min(requestedQuality, 5) : requestedQuality;
     const requestedWidth = integer(params.get("max_width"), 1080, 0, 4096);
     const image = {
       fit: "scale-down",

@@ -30,7 +30,9 @@ function sourceUrl(value, workerHost) {
     const url = new URL(raw);
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (!["http:", "https:"].includes(url.protocol)) return null;
-    if (url.username || url.password || url.port) return null;
+    const hathImagePort = url.protocol === "https:" && url.port === "2333" &&
+      (host === "hath.network" || host.endsWith(".hath.network"));
+    if (url.username || url.password || (url.port && !hathImagePort)) return null;
     if (host === workerHost || host === "localhost" || host.endsWith(".localhost") ||
         host.endsWith(".local") || host.endsWith(".internal")) return null;
     // Browser image URLs normally use domain names. Reject IP literals to avoid
@@ -40,6 +42,24 @@ function sourceUrl(value, workerHost) {
   } catch {
     return null;
   }
+}
+
+function isComixOrigin(value) {
+  if (!value) return false;
+  try {
+    const origin = new URL(value);
+    const host = origin.hostname.toLowerCase().replace(/\.$/, "");
+    return ["comix.to", "comix.ws"].some(domain => host === domain || host.endsWith(`.${domain}`));
+  } catch {
+    return false;
+  }
+}
+
+function comixMode(request, imageUrl) {
+  const v3 = imageUrl.searchParams.has("v3");
+  const origin = request.headers.get("Origin");
+  const legacy = !v3 && (imageUrl.hash === "#scrambled" || isComixOrigin(origin));
+  return { bypassTransform: v3 || legacy, forwardOrigin: legacy && isComixOrigin(origin) };
 }
 
 function imageUrlParameter(requestUrl, params) {
@@ -96,21 +116,33 @@ export default {
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
+    const { bypassTransform, forwardOrigin } = comixMode(request, imageUrl);
+    if (forwardOrigin) headers.set("Origin", request.headers.get("Origin"));
 
     try {
-      const transformed = await fetch(new Request(imageUrl.toString(), { headers }), {
+      const upstream = await fetch(new Request(imageUrl.toString(), { headers }), bypassTransform ? undefined : {
         cf: { image },
       });
       // Cloudflare caches transformed variants using the source URL and options.
       // Never forward upstream cookies or arbitrary response headers.
       const responseHeaders = new Headers();
-      for (const name of ["Content-Type", "Content-Length", "Cache-Control", "Etag", "Last-Modified"]) {
-        const value = transformed.headers.get(name);
+      const safeHeaders = ["Content-Type", "Content-Length", "Cache-Control", "Etag", "Last-Modified"];
+      if (bypassTransform) {
+        // Komikku's Comix source reads these response headers to decode encrypted
+        // bytes and descramble V3 image tiles after the HTTP response arrives.
+        safeHeaders.push(
+          "X-Enc-Seed", "X-Enc-Len", "X-Enc-Algo",
+          "X-Scramble-Seed", "X-Scramble-Grid", "X-Scramble-Algo", "X-Scramble-Hash",
+        );
+      }
+      for (const name of safeHeaders) {
+        const value = upstream.headers.get(name);
         if (value) responseHeaders.set(name, value);
       }
       for (const [name, value] of Object.entries(cors)) responseHeaders.set(name, value);
-      return new Response(transformed.body, {
-        status: transformed.status,
+      responseHeaders.set("Access-Control-Expose-Headers", "X-Enc-Seed, X-Enc-Len, X-Enc-Algo, X-Scramble-Seed, X-Scramble-Grid, X-Scramble-Algo, X-Scramble-Hash");
+      return new Response(upstream.body, {
+        status: upstream.status,
         headers: responseHeaders,
       });
     } catch (error) {

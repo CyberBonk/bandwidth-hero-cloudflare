@@ -7,7 +7,7 @@ Based on the MIT-licensed [himshim/bandwidth-hero-proxy2](https://github.com/him
 ## Deploy and publish automatically
 
 1. In Cloudflare, open **Workers & Pages → Create application → Import a repository**. Connect this GitHub repository and select `main`.
-2. Leave the build command blank. Set the deploy command to `npx wrangler deploy` if Cloudflare does not fill it in. The root directory is `/`.
+2. Leave the build command and root directory blank. Set the deploy command to `npx wrangler deploy` if Cloudflare does not fill it in.
 3. Ensure the Worker name is `bandwidth-hero-cloudflare`, matching `wrangler.jsonc`. Save and deploy. This publishes both `public/` and `src/worker.js` at a free `workers.dev` address.
 4. In **Workers & Pages → bandwidth-hero-cloudflare → Settings → Variables and Secrets**, add a **secret** named `PROXY_KEY`. Use a long random value with letters and numbers. Deploy the new version if Cloudflare asks. Keep this value out of the repository.
 5. In the Bandwidth Hero extension, set **Data Compression Service** to `https://bandwidth-hero-cloudflare.<your-subdomain>.workers.dev/api/index/<your-PROXY_KEY>`. The extension checks that URL, then appends `?url=...&jpeg=...&bw=...&l=...` for each image.

@@ -11,6 +11,15 @@ function reply(message, status = 200) {
   return new Response(message, { status, headers: { ...cors, "Cache-Control": "no-store" } });
 }
 
+function redirectToSource(url) {
+  const original = new URL(url);
+  original.hash = "";
+  return new Response(null, {
+    status: 302,
+    headers: { ...cors, "Cache-Control": "no-store", "Location": original.toString() },
+  });
+}
+
 function integer(value, fallback, min, max) {
   const number = Number.parseInt(value, 10);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
@@ -123,6 +132,7 @@ export default {
       const upstream = await fetch(new Request(imageUrl.toString(), { headers }), bypassTransform ? undefined : {
         cf: { image },
       });
+      if (!upstream.ok) return redirectToSource(imageUrl);
       // Cloudflare caches transformed variants using the source URL and options.
       // Never forward upstream cookies or arbitrary response headers.
       const responseHeaders = new Headers();
@@ -146,8 +156,8 @@ export default {
         headers: responseHeaders,
       });
     } catch (error) {
-      console.error("Image transformation failed", error);
-      return reply("Image transformation failed", 502);
+      console.error("Image proxy fetch failed", error);
+      return redirectToSource(imageUrl);
     }
   },
 };

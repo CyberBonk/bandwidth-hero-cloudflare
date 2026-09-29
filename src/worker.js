@@ -131,10 +131,11 @@ export default {
           resultHeaders.set("Access-Control-Expose-Headers", "X-Enc-Seed, X-Enc-Len, X-Enc-Algo, X-Scramble-Seed, X-Scramble-Grid, X-Scramble-Algo, X-Scramble-Hash");
           return new Response(backendResponse.body, { status: 200, headers: resultHeaders });
         }
+        return redirectToSource(imageUrl, `comix-backend-${backendResponse.status}`);
       } catch (error) {
         console.error("Comix backend fetch failed", error);
+        return redirectToSource(imageUrl, "comix-backend-fetch-error");
       }
-      return redirectToSource(imageUrl, "comix-backend-error");
     }
 
     const quality = integer(params.get("quality") ?? params.get("l"), 5, 1, 100);

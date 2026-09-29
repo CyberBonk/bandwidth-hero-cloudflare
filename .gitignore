@@ -1,0 +1,6 @@
+.vscode
+node_modules
+.wrangler
+.env
+.dev.vars
+yarn-error.log

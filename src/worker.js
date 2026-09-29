@@ -53,7 +53,7 @@ export default {
 
     const key = requestUrl.pathname.slice("/api/index/".length);
     if (!env.PROXY_KEY) return reply("Proxy key is not configured", 503);
-    if (requestUrl.pathname !== `/api/index/${env.PROXY_KEY}` || !key) {
+    if (![ `/api/index/${env.PROXY_KEY}`, `/api/index/${env.PROXY_KEY}/` ].includes(requestUrl.pathname) || !key) {
       return reply("Forbidden", 403);
     }
 
@@ -67,7 +67,7 @@ export default {
     const image = {
       fit: "scale-down",
       quality,
-      format: params.get("jpeg") === "1" ? "jpeg" : "webp",
+      format: params.get("jpeg") === "1" || params.get("jpg") === "1" ? "jpeg" : "webp",
       metadata: "none",
     };
     if (requestedWidth > 0) image.width = requestedWidth;

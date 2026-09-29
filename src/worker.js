@@ -11,12 +11,12 @@ function reply(message, status = 200) {
   return new Response(message, { status, headers: { ...cors, "Cache-Control": "no-store" } });
 }
 
-function redirectToSource(url) {
+function redirectToSource(url, reason = "upstream-error") {
   const original = new URL(url);
   original.hash = "";
   return new Response(null, {
     status: 302,
-    headers: { ...cors, "Cache-Control": "no-store", "Location": original.toString() },
+    headers: { ...cors, "Cache-Control": "no-store", "Location": original.toString(), "X-Proxy-Fallback": reason },
   });
 }
 
@@ -125,6 +125,11 @@ export default {
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
+    // Comix image hosts reject requests without a Comix site header. Komikku
+    // removes Origin when its image URL points at this proxy.
+    if (/\.cipher-vault-alpha\.site$/i.test(imageUrl.hostname) && !headers.has("Referer")) {
+      headers.set("Referer", "https://comix.to/");
+    }
     const { bypassTransform, forwardOrigin } = comixMode(request, imageUrl);
     if (forwardOrigin) headers.set("Origin", request.headers.get("Origin"));
 
@@ -132,7 +137,7 @@ export default {
       const upstream = await fetch(new Request(imageUrl.toString(), { headers }), bypassTransform ? undefined : {
         cf: { image },
       });
-      if (!upstream.ok) return redirectToSource(imageUrl);
+      if (!upstream.ok) return redirectToSource(imageUrl, `upstream-${upstream.status}`);
       // Cloudflare caches transformed variants using the source URL and options.
       // Never forward upstream cookies or arbitrary response headers.
       const responseHeaders = new Headers();
@@ -157,7 +162,7 @@ export default {
       });
     } catch (error) {
       console.error("Image proxy fetch failed", error);
-      return redirectToSource(imageUrl);
+      return redirectToSource(imageUrl, "fetch-error");
     }
   },
 };
